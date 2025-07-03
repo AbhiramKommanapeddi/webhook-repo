@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Webhook Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #24292e;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 1.1rem;
+        }
+
+        .status-bar {
+            background: #f6f8fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e1e4e8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .last-updated {
+            font-size: 0.9rem;
+            color: #586069;
+        }
+
+        .actions-container {
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .action-item {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .action-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .action-item.push {
+            border-left: 4px solid #28a745;
+        }
+
+        .action-item.pull_request {
+            border-left: 4px solid #0366d6;
+        }
+
+        .action-item.merge {
+            border-left: 4px solid #6f42c1;
+        }
+
+        .action-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .action-text {
+            flex: 1;
+            font-size: 1.1rem;
+            color: #24292e;
+            line-height: 1.4;
+        }
+
+        .action-timestamp {
+            font-size: 0.9rem;
+            color: #586069;
+            text-align: right;
+            min-width: 200px;
+        }
+
+        .action-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 10px;
+            text-transform: uppercase;
+        }
+
+        .badge-push {
+            background: #dcffe4;
+            color: #28a745;
+        }
+
+        .badge-pull_request {
+            background: #dbeafe;
+            color: #0366d6;
+        }
+
+        .badge-merge {
+            background: #f3e8ff;
+            color: #6f42c1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #586069;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #586069;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #0366d6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .action-content {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .action-timestamp {
+                min-width: auto;
+                text-align: left;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔗 GitHub Webhook Monitor</h1>
+            <p>Real-time monitoring of GitHub repository actions</p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span>Live monitoring active</span>
+            </div>
+            <div class="last-updated">
+                Last updated: <span id="lastUpdated">Never</span>
+            </div>
+        </div>
+
+        <div class="actions-container">
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                Loading actions...
+            </div>
+            <div id="actions-list" style="display: none;"></div>
+            <div id="empty-state" class="empty-state" style="display: none;">
+                <h3>No actions yet</h3>
+                <p>Waiting for GitHub webhook events...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let lastUpdateTime = null;
+
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const options = {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            };
+            return date.toLocaleDateString('en-US', options);
+        }
+
+        function formatActionText(action) {
+            const author = action.author || 'Unknown';
+            const timestamp = formatTimestamp(action.timestamp);
+
+            switch (action.action) {
+                case 'push':
+                    return `<strong>${author}</strong> pushed to <strong>${action.to_branch}</strong> on ${timestamp}`;
+                case 'pull_request':
+                    return `<strong>${author}</strong> submitted a pull request from <strong>${action.from_branch}</strong> to <strong>${action.to_branch}</strong> on ${timestamp}`;
+                case 'merge':
+                    return `<strong>${author}</strong> merged branch <strong>${action.from_branch}</strong> to <strong>${action.to_branch}</strong> on ${timestamp}`;
+                default:
+                    return `<strong>${author}</strong> performed ${action.action} on ${timestamp}`;
+            }
+        }
+
+        function renderActions(actions) {
+            const container = document.getElementById('actions-list');
+            const loading = document.getElementById('loading');
+            const emptyState = document.getElementById('empty-state');
+
+            loading.style.display = 'none';
+
+            if (actions.length === 0) {
+                container.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            container.style.display = 'block';
+
+            container.innerHTML = actions.map(action => `
+                <div class="action-item ${action.action}">
+                    <div class="action-content">
+                        <div class="action-text">
+                            <span class="action-badge badge-${action.action}">${action.action}</span>
+                            ${formatActionText(action)}
+                        </div>
+                        <div class="action-timestamp">
+                            ${formatTimestamp(action.timestamp)}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateLastUpdatedTime() {
+            const now = new Date();
+            document.getElementById('lastUpdated').textContent = now.toLocaleTimeString();
+        }
+
+        async function fetchActions() {
+            try {
+                const response = await fetch('/api/actions');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch actions');
+                }
+                
+                const data = await response.json();
+                renderActions(data.actions);
+                updateLastUpdatedTime();
+                
+            } catch (error) {
+                console.error('Error fetching actions:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div style="color: #d73a49;">Failed to load actions. Retrying...</div>';
+            }
+        }
+
+        // Initial load
+        fetchActions();
+
+        // Poll every 15 seconds
+        setInterval(fetchActions, 15000);
+
+        // Update the "Last updated" time every second
+        setInterval(updateLastUpdatedTime, 1000);
+    </script>
+</body>
+</html>

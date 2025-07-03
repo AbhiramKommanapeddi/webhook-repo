@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  webhook-app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/
+      - DATABASE_NAME=github_webhooks
+      - COLLECTION_NAME=actions
+      - SECRET_KEY=docker-secret-key-change-in-production
+      - FLASK_ENV=development
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+  # Optional: MongoDB admin interface
+  mongo-express:
+    image: mongo-express:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
